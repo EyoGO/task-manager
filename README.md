@@ -1,39 +1,30 @@
 # Task Manager
-Юрій Генташ
+**Yurii Hentash**
 
-Мова програмування: Java 17+
-Фреймворк: Spring
+**Programming Language**: Java 17+  
+**Framework**: Spring  
 
-Перед запуском необхідно створити нову базу з назвою taskmanager в PostgreSQL (в H2 це відбувається автоматично).
-У файлі application.yml, у разі необхідності, змінити дані про PostgreSQL.
-Для запуску використовувати команду java -jar taskManager.jar
-Після запуску можна виконувати запити з умови завдання на ресурс http://localhost:8080/api/v1/tasks.
+Before launching, a new database named `taskmanager` must be created in PostgreSQL (in H2, this happens automatically). If necessary, modify PostgreSQL details in the `application.yml` file. To run the application, use the command:  
+`java -jar taskManager.jar`.  
 
-Створено REST сервіс з методами відповідно до умови для сутності Task(UUID id, Status status, String description).
-DDL для обох баз даних генерується автоматично на основі аннотацій сутності Task для спрощення задачі.
+After launching, requests from the task specification can be executed on the resource:  
+[http://localhost:8080/api/v1/tasks](http://localhost:8080/api/v1/tasks).
 
-Згенеровану документацію можна переглянути у [Swagger](http://localhost:8080/swagger-ui.html) 
-У програмі є controller, service, repository шари. З них unit-тестами на 52% покритий TaskService.
-POST, PUT, PATCH містять валідацію вхідних DTO.
+A REST service was created with methods corresponding to the requirements for the `Task` entity (`UUID id, Status status, String description`). DDL for both databases is generated automatically based on the annotations of the `Task` entity to simplify the task.
 
-Методи сервісу містять невеликі інформаційні логи та логи про перемикання/синхронізацію баз даних (вивід в консоль та в файл).
+Generated documentation can be viewed in **Swagger**.  
+The application has **controller**, **service**, and **repository** layers. Of these, `TaskService` is covered by unit tests at **52%**. The `POST`, `PUT`, and `PATCH` methods include validation of incoming DTOs.
 
-З додаткових бізнес-правил додано перевірку на дублікати при створенні - task повинна бути унікальною за статусом і описом 
-(хоча логічніше робити лише за описом).
+Service methods include small informational logs and logs for database switching/synchronization (output to the console and a file).
 
-Найскладнішою частиною завдання було додавання резервної бази даних.
-Для цього було створено 2 DataSource, та відповідно 2 репозиторії для кожної з баз даних.
-Для перемикання між базами даних створено @Scheduled метод, який з певною періодичністю робить запит
-на базу даних, щоб впевнитись що вона працює (але краще добавити таку логіку і в хендлінг помилок - коли база відмовила 
-і хтось надіслав запит матимемо помилку і після кількох спроб можна перемикати бази). 
-У разі її відмови, програма починає працювати з репозиторієм резервної бази даних. @Scheduled метод продовжуватиме 
-пінгувати базу, щоб перемкнутись назад в разі її відновлення.
+As an additional business rule, a duplicate check was added during creation – a `Task` must be unique by status and description (though logically, uniqueness by description alone would suffice).
 
-При цьому, важливо зберігати однакові дані в обох базах. Тому при перемиканні баз в обов'язковому порядку
-запускається механізм синхронізації даних (він періодично запускається сам, але при перемиканні ми змушуємо його відпрацювати).
-Для цього в програмі є 2 впорядкованих списки create/update/delete івентів List<CudEvent>. У звичайному режимі
-програма записує дані лише в одну базу, а для іншої додає в її список івент про це. Далі @Scheduled метод перевіряє 
-наявність івентів в списках і виконує відповідні запити на другу базу, після чого очищає список. 
-Завдяки такому підходу все що відбулось з основною базою відбудеться і з резервною в тій же послідовності 
-(Це спрощений варіант асинхронної запису в рамках тестового завдання, в реальній системі замість 
-списків у пам'яті використовувався б месседжінг сервіс Kafka/RabbitMQ/...)
+The most challenging part of the task was adding the backup database. For this, two `DataSource` configurations and corresponding repositories were created for each database. A `@Scheduled` method was implemented for switching between databases. It periodically queries the database to ensure it is operational (though it would be better to add such logic to error handling – if the database fails and a request is sent, we would encounter an error, and after a few attempts, switching to the backup database could occur).  
+
+In case of failure, the program starts working with the repository of the backup database. The `@Scheduled` method continues to ping the primary database to switch back when it becomes available.
+
+It is crucial to maintain consistent data in both databases. Therefore, when switching databases, a data synchronization mechanism is triggered (this mechanism also runs periodically, but during switching, it is forced to execute). For this, the program maintains two ordered lists of create/update/delete events (`List`).  
+
+In normal operation, the program writes data only to one database and adds an event to the list for the other database. Then, the `@Scheduled` method checks for events in the lists and executes the corresponding requests on the second database, clearing the list afterward. Thanks to this approach, everything that happens to the primary database also happens to the backup database in the same sequence.  
+
+(This is a simplified version of asynchronous writing for a test task. In a real system, instead of in-memory lists, a messaging service like Kafka or RabbitMQ would be used.)
